@@ -247,6 +247,10 @@ def infer_relations(flow_logs, eni_map):
 
   return {"nodes": nodes, "edges": edges}
 
+@app.route("/")
+def home():
+    return "API running"
+
 
 # ----------------- Flask Endpoint -----------------
 @app.route("/graph", methods=["GET"])
