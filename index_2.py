@@ -7,6 +7,19 @@ import os
 
 app = Flask(__name__)
 
+
+# ----------------- Port → Service Mapping -----------------
+PORT_SERVICE_MAP = {
+    22: "SSH",
+    80: "HTTP",
+    443: "HTTPS",
+    5432: "PostgreSQL",
+    3306: "MySQL",
+    6379: "Redis",
+    53: "DNS",
+    123: "NTP"
+}
+
 # ----------------- Config -----------------
 ROLE_ARN = "arn:aws:iam::146937414118:role/Saas_Infra_Readonly"
 REGION = "us-east-1"
