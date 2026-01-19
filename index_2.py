@@ -190,7 +190,7 @@ def graph():
         return jsonify({"error": "No flow logs found"}), 404
 
     eni_map = build_eni_map()
-    traffic_graph = infer_relations(flow_logs, eni_map)
+    # traffic_graph = infer_relations(flow_logs, eni_map)
 
     infra_graph = fetch_infra_topology()
 
