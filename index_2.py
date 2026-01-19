@@ -181,6 +181,59 @@ def fetch_infra_topology():
 
 # ----------------- Infer Relations -----------------
 
+def infer_relations(flow_logs, eni_map):
+  edges = []
+  nodes = []
+  seen_nodes = set()
+
+  def add_node(n):
+    if n["id"] not in seen_nodes:
+      nodes.append(n)
+      seen_nodes.add(n["id"])
+
+  for log in flow_logs:
+    src_ip = log["src"]
+    dst_ip = log["dst"]
+
+    src_node = eni_map.get(src_ip)
+    dst_node = eni_map.get(dst_ip)
+
+    if not src_node:
+      src_node = {"type": "Internet", "id": "Internet", "name": "Internet"}
+
+    if not dst_node:
+      dst_node = {"type": "Internet", "id": "Internet", "name": "Internet"}
+
+    add_node(src_node)
+    add_node(dst_node)
+
+    port = log["dstPort"]
+    protocol = "TCP" if log["protocol"] == 6 else "UDP" if log[
+        "protocol"] == 17 else str(log["protocol"])
+
+    # Interpret connection type
+    if src_node["type"] == "External" and dst_node["type"] == "EC2":
+      relation = f"Internet → EC2:{dst_node['name']} (Port {port})"
+
+    elif src_node["type"] == "EC2" and dst_node["type"] == "RDS":
+      relation = f"EC2:{src_node['name']} → RDS:{dst_node['name']} ({PORT_SERVICE_MAP.get(port,'Custom')})"
+
+    elif src_node["type"] == "EC2" and dst_node["type"] == "EC2":
+      relation = f"EC2:{src_node['name']} → EC2:{dst_node['name']} (Port {port})"
+
+    else:
+      relation = f"{src_node['type']} → {dst_node['type']} (Port {port})"
+
+    edges.append({
+        "from": src_node["id"],
+        "to": dst_node["id"],
+        "protocol": protocol,
+        "port": port,
+        "relation": relation
+    })
+
+  return {"nodes": nodes, "edges": edges}
+
 
 # ----------------- Flask Endpoint -----------------
 @app.route("/graph", methods=["GET"])
@@ -190,7 +243,7 @@ def graph():
         return jsonify({"error": "No flow logs found"}), 404
 
     eni_map = build_eni_map()
-    # traffic_graph = infer_relations(flow_logs, eni_map)
+    traffic_graph = infer_relations(flow_logs, eni_map)
 
     infra_graph = fetch_infra_topology()
 
