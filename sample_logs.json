@@ -1,0 +1,24 @@
+{
+  "flow_logs": [
+    {
+      "interfaceId": "eni-0e201ee7f0131ec46",
+      "srcAddr": "172.172.157.1",
+      "dstAddr": "10.0.14.67",
+      "srcPort": 36736,
+      "dstPort": 22,
+      "protocol": 6,
+      "action": "ACCEPT",
+      "bytes": 1912
+    },
+    {
+      "interfaceId": "eni-0e201ee7f0131ec46",
+      "srcAddr": "10.0.14.67",
+      "dstAddr": "3.5.6.7",
+      "srcPort": 22,
+      "dstPort": 443,
+      "protocol": 6,
+      "action": "ACCEPT",
+      "bytes": 2048
+    }
+  ]
+}
