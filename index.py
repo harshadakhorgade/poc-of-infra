@@ -87,14 +87,29 @@ def build_eni_map():
                 }
 
     # RDS
-    dbs = rds.describe_db_instances().get("DBInstances", [])
-    for db in dbs:
-        for addr in [db["Endpoint"]["Address"]]:
-            eni_map[addr] = {
+    # dbs = rds.describe_db_instances().get("DBInstances", [])
+    # for db in dbs:
+    #     for addr in [db["Endpoint"]["Address"]]:
+    #         eni_map[addr] = {
+    #             "type": "RDS",
+    #             "id": db["DBInstanceIdentifier"],
+    #             "name": db["DBInstanceIdentifier"]
+    #         }
+
+     # RDS (CORRECT WAY)
+    enis = ec2.describe_network_interfaces()["NetworkInterfaces"]
+
+    for eni in enis:
+        desc = eni.get("Description", "")
+        ip = eni.get("PrivateIpAddress")
+
+        if desc.startswith("RDSNetworkInterface"):
+            eni_map[ip] = {
                 "type": "RDS",
-                "id": db["DBInstanceIdentifier"],
-                "name": db["DBInstanceIdentifier"]
+                "id": eni["NetworkInterfaceId"],
+                "name": desc
             }
+
 
     return eni_map
 
