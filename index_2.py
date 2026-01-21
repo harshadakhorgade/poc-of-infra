@@ -195,61 +195,159 @@ def fetch_infra_topology():
 # ----------------- Infer Relations -----------------
 
 def infer_relations(flow_logs, eni_map):
-  edges = []
-  nodes = []
-  seen_nodes = set()
+    edges_map = {}  # key: (src_id, dst_id), value: set of ports
+    nodes = []
+    seen_nodes = set()
 
-  def add_node(n):
-    if n["id"] not in seen_nodes:
-      nodes.append(n)
-      seen_nodes.add(n["id"])
+    def add_node(n):
+        if n["id"] not in seen_nodes:
+            nodes.append(n)
+            seen_nodes.add(n["id"])
 
-  for log in flow_logs:
-    src_ip = log["src"]
-    dst_ip = log["dst"]
+    for log in flow_logs:
+        src_ip = log["src"]
+        dst_ip = log["dst"]
+        port = log["dstPort"]
+        protocol = "TCP" if log["protocol"] == 6 else "UDP" if log["protocol"] == 17 else str(log["protocol"])
 
-    src_node = eni_map.get(src_ip)
-    dst_node = eni_map.get(dst_ip)
+        src_node = eni_map.get(src_ip, {"type": "Internet", "id": "Internet", "name": "Internet"})
+        dst_node = eni_map.get(dst_ip, {"type": "Internet", "id": "Internet", "name": "Internet"})
 
-    if not src_node:
-      src_node = {"type": "Internet", "id": "Internet", "name": "Internet"}
+        add_node(src_node)
+        add_node(dst_node)
 
-    if not dst_node:
-      dst_node = {"type": "Internet", "id": "Internet", "name": "Internet"}
+        key = (src_node["id"], dst_node["id"])
+        if key not in edges_map:
+            edges_map[key] = {"ports": set(), "protocols": set(), "type": f"{src_node['type']} → {dst_node['type']}"}
+        edges_map[key]["ports"].add(port)
+        edges_map[key]["protocols"].add(protocol)
 
-    add_node(src_node)
-    add_node(dst_node)
+    # Convert edges_map to list
+    edges = []
+    for (src_id, dst_id), info in edges_map.items():
+        edges.append({
+            "from": src_id,
+            "to": dst_id,
+            "ports": sorted(info["ports"]),
+            "protocols": list(info["protocols"]),
+            "relation": info["type"]
+        })
 
-    port = log["dstPort"]
-    protocol = "TCP" if log["protocol"] == 6 else "UDP" if log[
-        "protocol"] == 17 else str(log["protocol"])
+    return {"nodes": nodes, "edges": edges}
 
-    # Interpret connection type
-    if src_node["type"] == "External" and dst_node["type"] == "EC2":
-      relation = f"Internet → EC2:{dst_node['name']} (Port {port})"
 
-    elif src_node["type"] == "EC2" and dst_node["type"] == "RDS":
-      relation = f"EC2:{src_node['name']} → RDS:{dst_node['name']} ({PORT_SERVICE_MAP.get(port,'Custom')})"
+def build_hierarchical_infra():
+    ec2 = aws_client("ec2")
+    rds = aws_client("rds")
 
-    elif src_node["type"] == "EC2" and dst_node["type"] == "EC2":
-      relation = f"EC2:{src_node['name']} → EC2:{dst_node['name']} (Port {port})"
+    output = {"vpcs": []}
 
-    else:
-      relation = f"{src_node['type']} → {dst_node['type']} (Port {port})"
+    # ---------- Cache ----------
+    subnets = ec2.describe_subnets()["Subnets"]
+    route_tables = ec2.describe_route_tables()["RouteTables"]
+    instances = ec2.describe_instances()["Reservations"]
+    igws = ec2.describe_internet_gateways()["InternetGateways"]
+    dbs = rds.describe_db_instances()["DBInstances"]
 
-    edges.append({
-        "from": src_node["id"],
-        "to": dst_node["id"],
-        "protocol": protocol,
-        "port": port,
-        "relation": relation
-    })
+    # ---------- Route Table Lookup ----------
+    subnet_routes = {}
+    for rt in route_tables:
+        for assoc in rt.get("Associations", []):
+            if "SubnetId" in assoc:
+                subnet_routes[assoc["SubnetId"]] = rt
 
-  return {"nodes": nodes, "edges": edges}
+    # ---------- VPC Loop ----------
+    for vpc in ec2.describe_vpcs()["Vpcs"]:
+        vpc_id = vpc["VpcId"]
+
+        vpc_obj = {
+            "id": vpc_id,
+            "internetGateway": None,
+            "subnets": {
+                "public": [],
+                "private": []
+            }
+        }
+
+        # ---------- Internet Gateway ----------
+        for igw in igws:
+            for att in igw.get("Attachments", []):
+                if att["VpcId"] == vpc_id:
+                    vpc_obj["internetGateway"] = {
+                        "id": igw["InternetGatewayId"]
+                    }
+
+        # ---------- Subnets ----------
+        for subnet in [s for s in subnets if s["VpcId"] == vpc_id]:
+            subnet_id = subnet["SubnetId"]
+            rt = subnet_routes.get(subnet_id)
+
+            is_public = False
+            routes = []
+
+            if rt:
+                for r in rt.get("Routes", []):
+                    if r.get("DestinationCidrBlock") == "0.0.0.0/0" and "GatewayId" in r:
+                        is_public = True
+                    routes.append({
+                        "destination": r.get("DestinationCidrBlock"),
+                        "target": r.get("GatewayId") or r.get("NatGatewayId")
+                    })
+
+            subnet_obj = {
+                "id": subnet_id,
+                "availabilityZone": subnet.get("AvailabilityZone"),
+                "routeTable": {
+                    "id": rt["RouteTableId"],
+                    "routes": routes
+                } if rt else None,
+                "resources": {
+                    "ec2Instances": [],
+                    "loadBalancers": [],
+                    "s3Buckets": [],
+                    "rdsInstances": [],
+                    "lambdaFunctions": []
+                }
+            }
+
+            # ---------- EC2 ----------
+            for r in instances:
+                for i in r["Instances"]:
+                    if i.get("SubnetId") == subnet_id:
+                        subnet_obj["resources"]["ec2Instances"].append({
+                            "id": i["InstanceId"],
+                            "type": "EC2",
+                            "publiclyAccessible": bool(i.get("PublicIpAddress"))
+                        })
+
+            # ---------- RDS ----------
+            for db in dbs:
+                for s in db["DBSubnetGroup"]["Subnets"]:
+                    if s["SubnetIdentifier"] == subnet_id:
+                        subnet_obj["resources"]["rdsInstances"].append({
+                            "id": db["DBInstanceIdentifier"],
+                            "engine": db["Engine"],
+                            "publiclyAccessible": db["PubliclyAccessible"]
+                        })
+
+            if is_public:
+                vpc_obj["subnets"]["public"].append(subnet_obj)
+            else:
+                vpc_obj["subnets"]["private"].append(subnet_obj)
+
+        output["vpcs"].append(vpc_obj)
+
+    return output
+
+
+
 
 @app.route("/")
 def home():
     return "API running"
+
+
+
 
 
 # ----------------- Flask Endpoint -----------------
@@ -268,6 +366,10 @@ def graph():
         "traffic": traffic_graph,
         "topology": infra_graph
     })
+
+@app.route("/infra", methods=["GET"])
+def infra():
+    return jsonify(build_hierarchical_infra())
 
 
 # ----------------- Run App -----------------
