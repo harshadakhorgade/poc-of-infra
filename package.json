@@ -1,0 +1,26 @@
+{
+  "name": "poc",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index_3.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/harshadakhorgade/poc-of-infra.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/harshadakhorgade/poc-of-infra/issues"
+  },
+  "homepage": "https://github.com/harshadakhorgade/poc-of-infra#readme",
+  "dependencies": {
+    "aws-sdk": "^2.1693.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "ipaddr.js": "^2.3.0"
+  }
+}
