@@ -4,9 +4,11 @@ from botocore.exceptions import ClientError
 import time
 import ipaddress
 import os
+from flask_cors import CORS
+
 
 app = Flask(__name__)
-
+CORS(app)
 
 # ----------------- Port → Service Mapping -----------------
 PORT_SERVICE_MAP = {
@@ -380,7 +382,7 @@ def infra():
 
 
     
-# /audit/q3/encryption-at-rest
+# https://poc-of-infra.onrender.com/audit/q3/encryption-at-rest
 
 
 @app.route("/audit/q3/encryption-at-rest")
@@ -429,7 +431,7 @@ def encryption_at_rest():
     })
 
 
-# /audit/q3/encryption-in-transit
+# https://poc-of-infra.onrender.com/audit/q3/encryption-in-transit
 
 @app.route("/audit/q3/encryption-in-transit")
 def encryption_in_transit():
@@ -461,7 +463,7 @@ def encryption_in_transit():
     })
 
 
-# /audit/q3/mfa
+# https://poc-of-infra.onrender.com/audit/q3/mfa
 
 
 @app.route("/audit/q3/mfa")
@@ -495,7 +497,7 @@ def mfa_status():
     })
 
 
-#  /audit/q3/access-control
+#  https://poc-of-infra.onrender.com/audit/q3/access-control
 
 @app.route("/audit/q3/access-control")
 def access_control():
@@ -526,7 +528,7 @@ def access_control():
     })
 
 
-# /audit/q3/audit-logging
+# https://poc-of-infra.onrender.com/audit/q3/audit-logging
 
 @app.route("/audit/q3/audit-logging")
 def audit_logging():
@@ -556,7 +558,7 @@ def audit_logging():
     })
 
 
-# /audit/q3/network-segmentation
+# https://poc-of-infra.onrender.com/audit/q3/network-segmentation
 
 @app.route("/audit/q3/network-segmentation")
 def network_segmentation():
@@ -583,7 +585,7 @@ def network_segmentation():
     })
 
 
-#  /audit/q3/network-segmentation
+#  https://poc-of-infra.onrender.com/audit/q3/network-segmentation
 
 @app.route("/audit/q3/summary")
 def q3_summary():
